@@ -9,10 +9,11 @@ A minimal, high-performance web-based productivity timer designed for focus. Zen
 * **Dual Modes:** Seamlessly toggle between a classic **Stopwatch** and a customizable **Pomodoro** timer.
 * **Immersive Design:** Supports custom background colors, font styles, and **Wallpaper Uploads** with automatic text-shadow adjustment for readability.
 * **Smart Dimming:** Optional "Auto-Dim" feature kicks in after 2 minutes of activity to reduce screen glare and save battery.
+* **Glassmorphism UI:** Frosted-glass panels with deep blurs that adapt beautifully to any background.
+* **Burn-In Protection:** Active pixel-shifting prevents image retention on OLED/AMOLED displays during long sessions.
 * **Haptic & Audio:** Integrated "Wind Chime" sound for session completion and adjustable haptic feedback for touch interactions.
 * **History & Analytics:** Tracks your sessions locally and provides a 7-day daily activity breakdown.
-* **Privacy First:** All data is stored locally in your browser's `localStorage`. No tracking, no cookies, no backend.
-
+  
 ## ⌨️ Keyboard Shortcuts
 
 Master your workflow with these quick keys:
