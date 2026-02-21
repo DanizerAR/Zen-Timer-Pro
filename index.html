@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zen Timer Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron&family=JetBrains+Mono&family=Inter:wght@300;600&family=Bebas+Neue&family=Space+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #000000;
+            --timer-color: #ffffff;
+            --font-size: 8rem;
+            --timer-font: 'Inter', sans-serif;
+        }
+
+        * { -webkit-tap-highlight-color: transparent; outline: none; }
+
+        body {
+            margin: 0; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background-color: var(--bg-color); color: var(--timer-color); font-family: var(--timer-font);
+            transition: background 0.5s, color 0.5s, opacity 1.5s ease-in-out; overflow: hidden; cursor: default;
+            background-size: cover; background-position: center;
+        }
+
+        body.has-wallpaper { text-shadow: 0 4px 20px rgba(0,0,0,0.8); }
+        body.has-wallpaper .ui-element { filter: drop-shadow(0 2px 8px rgba(0,0,0,0.8)); }
+
+        body.dimmed { opacity: 0.15; }
+
+        .fade-out { opacity: 0 !important; pointer-events: none; transition: opacity 0.8s ease; }
+        .fade-in { opacity: 1 !important; pointer-events: auto; transition: opacity 0.3s ease; }
+
+        .modes { position: absolute; top: 40px; display: flex; gap: 20px; z-index: 10; }
+        .mode-btn {
+            background: none; border: none; color: inherit; opacity: 0.4;
+            padding: 8px 16px; cursor: pointer; font-size: 0.8rem; text-transform: uppercase;
+            letter-spacing: 2px; transition: 0.3s;
+        }
+        .mode-btn.active { opacity: 1; font-weight: bold; }
+
+        #session-counter {
+            position: fixed; top: 25px; left: 25px; font-size: 0.7rem; letter-spacing: 2px;
+            opacity: 0.4; z-index: 1100; text-transform: uppercase; cursor: pointer; transition: opacity 0.3s;
+        }
+        #session-counter:hover { opacity: 1; }
+
+        #history-panel {
+            position: fixed; left: -300px; top: 0; width: 300px; height: 100%;
+            background: rgba(20, 20, 20, 0.7); 
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            padding: 80px 20px 40px 20px; z-index: 1050;
+            transition: left 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            border-right: 1px solid rgba(255,255,255,0.1); overflow-y: auto; box-sizing: border-box;
+            display: flex; flex-direction: column;
+        }
+        #history-panel.open { left: 0; box-shadow: 15px 0 40px rgba(0,0,0,0.6); }
+        
+        #history-list { flex-grow: 1; }
+
+        .history-item { 
+            font-size: 0.7rem; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); 
+            opacity: 0.7; display: flex; align-items: center; justify-content: space-between;
+        }
+        .delete-btn { 
+            background: none; border: none; color: #ff5555; cursor: pointer; 
+            font-size: 1rem; padding: 0 5px; margin-left: 10px; opacity: 0.5; transition: 0.2s;
+        }
+        .delete-btn:hover { opacity: 1; transform: scale(1.2); }
+
+        .stats-header { font-size: 0.65rem; text-transform: uppercase; opacity: 0.4; margin-top: 30px; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; }
+        .stat-row { font-size: 0.75rem; display: flex; justify-content: space-between; margin-bottom: 5px; }
+
+        #display-wrapper {
+            transition: transform 0.5s ease-in-out;
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        #display { font-size: var(--font-size); font-variant-numeric: tabular-nums; margin-bottom: 20px; user-select: none; cursor: pointer; padding: 40px; }
+        .overtime-active { opacity: 0.4; }
+
+        .edit-pomo-trigger {
+            position: absolute; top: 10px; right: 10px; opacity: 0; visibility: hidden;
+            background: none; border: none; color: inherit; cursor: pointer; padding: 10px;
+            transition: none; z-index: 10;
+        }
+        
+        body.pomo-mode:not(.timer-running) .edit-pomo-trigger {
+            opacity: 0.6; visibility: visible;
+        }
+
+        .edit-pomo-trigger:hover { opacity: 1 !important; transform: scale(1.1); }
+
+        #pomo-setup-panel {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.9);
+            width: 280px; height: 280px; background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 2000; opacity: 0; visibility: hidden; transition: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3); padding: 30px; box-sizing: border-box; gap: 15px;
+        }
+        #pomo-setup-panel.open { opacity: 1; visibility: visible; transform: translate(-50%, -50%) scale(1); }
+
+        .controls { display: flex; gap: 40px; z-index: 10; }
+        .controls button { background: none; border: none; color: inherit; cursor: pointer; padding: 10px; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
+        .controls svg { width: 32px; height: 32px; stroke-width: 1.5; fill: none; stroke: currentColor; }
+        
+        .settings-toggle { position: fixed; top: 25px; right: 25px; z-index: 2100; opacity: 0.5; background: none; border: none; color: inherit; cursor: pointer; padding: 10px; transition: opacity 0.3s; }
+        .settings-toggle:hover { opacity: 1; }
+        .settings-toggle svg { width: 30px; height: 30px; stroke-width: 2; fill: none; stroke: currentColor; pointer-events: none; }
+
+        #settings-panel {
+            position: fixed; right: -300px; top: 0; width: 300px; height: 100%;
+            background: rgba(20, 20, 20, 0.7);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            color: white; padding: 80px 30px 60px 30px;
+            transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1); z-index: 1000;
+            display: flex; flex-direction: column; gap: 12px; 
+            border-left: 1px solid rgba(255,255,255,0.1); 
+            box-sizing: border-box; overflow-y: auto; overflow-x: hidden; max-height: 100vh;
+        }
+        #settings-panel.open { right: 0; box-shadow: -15px 0 40px rgba(0,0,0,0.6); }
+
+        label { font-size: 0.65rem; text-transform: uppercase; opacity: 0.5; margin-top: 8px; }
+        input[type="number"], input[type="color"], select, input[type="file"] { background: #222; color: white; border: none; padding: 10px; border-radius: 6px; font-size: 0.85rem; width: 100%; box-sizing: border-box; }
+        input[type="color"] { height: 40px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); }
+
+        .panel-btn { background: #333; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; margin-top: 5px; flex-shrink: 0; }
+        .reset-btn { background: #4a1a1a; color: #ff9999; width: 100%; margin-top: 20px; }
+        
+        .pomo-presets { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+        .pomo-presets button { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 10px; cursor: pointer; font-size: 0.7rem; border-radius: 8px; transition: 0.2s; }
+        .pomo-presets button:hover { background: rgba(255,255,255,0.2); }
+        
+        .switch-container { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .switch-label { font-size: 0.7rem; opacity: 0.7; letter-spacing: 1px; text-transform: uppercase; flex: 1; }
+        .switch-container input[type="checkbox"] { width: auto; cursor: pointer; margin-left: 10px; }
+
+        #watermark { position: fixed; bottom: 25px; left: 25px; font-size: 0.6rem; letter-spacing: 1px; opacity: 1.0; color: var(--timer-color); text-transform: uppercase; pointer-events: none; user-select: none; z-index: 10; }
+        .shortcut-hint { font-size: 0.6rem; opacity: 0.4; margin-top: 15px; text-align: center; line-height: 1.5; padding-bottom: 10px; }
+    </style>
+</head>
+<body onclick="handleGlobalClick(event)" onmousemove="wakeUp()" ontouchstart="handleTouchStart(event)" ontouchend="handleTouchEnd(event)" onwheel="handleWheel(event)">
+
+    <div id="session-counter" class="ui-element" onclick="toggleHistory(event)">Sessions: 0</div>
+
+    <div id="history-panel" onclick="event.stopPropagation()">
+        <h3 style="font-weight:300; margin-top:0; letter-spacing:1px;">HISTORY</h3>
+        <div id="history-list"></div>
+        <div class="stats-header">Daily Stats</div>
+        <div id="daily-stats"></div>
+        <button onclick="resetSessionCount()" class="panel-btn reset-btn">Reset All History</button>
+    </div>
+
+    <button class="settings-toggle ui-element" onclick="toggleSettings(event)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+    </button>
+
+    <div class="modes ui-element">
+        <button class="mode-btn active" id="mode-stopwatch" onclick="setMode('stopwatch')">Stopwatch</button>
+        <button class="mode-btn" id="mode-pomodoro" onclick="setMode('pomodoro')">Pomodoro</button>
+    </div>
+
+    <div id="settings-panel" onclick="event.stopPropagation()">
+        <h2 style="font-weight:300; margin:0;">Settings</h2>
+        <button onclick="toggleFullScreen()" class="panel-btn">⛶ Fullscreen</button>
+        
+        <div class="switch-container">
+            <span class="switch-label">WIND CHIME</span>
+            <input type="checkbox" id="soundToggle" checked onchange="saveSetting('sound-pref', this.checked)">
+        </div>
+        <div class="switch-container">
+            <span class="switch-label">HAPTIC FEEDBACK</span>
+            <input type="checkbox" id="hapticToggle" onchange="saveSetting('haptic-pref', this.checked)">
+        </div>
+        <div class="switch-container">
+            <span class="switch-label">AUTO-DIM (2M)</span>
+            <input type="checkbox" id="autoDimToggle" onchange="saveSetting('auto-dim', this.checked)">
+        </div>
+
+        <label>Haptic Intensity</label>
+        <input type="range" min="1" max="100" value="20" id="hapticIntensity" oninput="saveSetting('haptic-intensity', this.value)">
+
+        <label>Timer Color</label>
+        <input type="color" id="timerColorInput" oninput="updateUI('timer-color', this.value)">
+        
+        <label>Background Color</label>
+        <input type="color" id="bgInput" oninput="updateUI('bg-color', this.value)">
+
+        <label>Background Image</label>
+        <input type="file" id="wallpaperInput" accept="image/*" onchange="handleWallpaper(this)">
+        <button onclick="clearWallpaper()" class="panel-btn" style="padding:5px; font-size:0.6rem;">Remove Image</button>
+        
+        <label>Font Style</label>
+        <select id="fontSelect" onchange="updateUI('timer-font', this.value)">
+            <option value="'Inter'">Minimal</option>
+            <option value="'Orbitron'">Digital</option>
+            <option value="'Space Mono'">Tech</option>
+            <option value="'Bebas Neue'">Bold</option>
+        </select>
+        
+        <label>Timer Size</label>
+        <input type="range" min="3" max="22" step="1" id="sizeInput" oninput="updateUI('font-size', this.value + 'rem')">
+        
+        <div class="shortcut-hint">
+            SPACE: Start/Stop | R: Reset | S: Settings<br>
+            H: History | F: Fullscreen | M: Change Mode
+        </div>
+    </div>
+
+    <div id="pomo-setup-panel" onclick="event.stopPropagation()">
+        <h3 style="font-weight:300; margin:0; letter-spacing:2px; font-size: 0.9rem;">POMO SETUP</h3>
+        <label style="opacity:0.8">Duration (mins)</label>
+        <input type="number" id="pomoMinutes" value="25" onchange="updatePomoTime()">
+        <div class="pomo-presets">
+            <button onclick="setPreset(25)">25m</button>
+            <button onclick="setPreset(45)">45m</button>
+            <button onclick="setPreset(60)">60m</button>
+            <button onclick="setPreset(90)">90m</button>
+        </div>
+        <button onclick="togglePomoPanel(event)" class="panel-btn" style="width:100%; margin-top:10px; background:rgba(255,255,255,0.1)">Done</button>
+    </div>
+
+    <div id="display-wrapper">
+        <button class="edit-pomo-trigger ui-element" id="pomo-edit-btn" onclick="togglePomoPanel(event)">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        </button>
+        <div id="display" onclick="toggleTimer(event)">0</div>
+    </div>
+    
+    <div class="controls ui-element">
+        <button id="mainToggleBtn" onclick="toggleTimer(event)"><svg id="toggleIcon" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z"/></svg></button>
+        <button onclick="resetTimer()"><svg viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg></button>
+    </div>
+
+    <div id="watermark" class="ui-element">Made by Danizer</div>
+
+    <script>
+        let mode = 'stopwatch', startTime, elapsedTime = 0, timerInterval, isRunning = false;
+        let pomoDuration = 25 * 60 * 1000, fadeTimeout, wakeLock = null;
+        let sessionCount = 0, chimePlayed = false, sessionLogged = false;
+        let touchStartX = 0, touchEndX = 0, touchStartY = 0, touchEndY = 0;
+        let startInPanel = false;
+        let pixelShiftInterval;
+
+        async function requestWakeLock() {
+            try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } 
+            catch (err) {}
+        }
+
+        function releaseWakeLock() { if (wakeLock) { wakeLock.release(); wakeLock = null; } }
+
+        function triggerHaptic(multiplier = 1) {
+            const isEnabled = document.getElementById('hapticToggle').checked;
+            const intensity = parseInt(document.getElementById('hapticIntensity').value);
+            if (isEnabled && navigator.vibrate) {
+                navigator.vibrate(Math.max(1, (intensity / 5) * multiplier));
+            }
+        }
+
+        function wakeUp() {
+            document.body.classList.remove('dimmed');
+            document.querySelectorAll('.ui-element').forEach(el => { el.classList.remove('fade-out'); el.classList.add('fade-in'); });
+            clearTimeout(fadeTimeout);
+            if (isRunning) {
+                fadeTimeout = setTimeout(() => {
+                    document.querySelectorAll('.ui-element').forEach(el => { el.classList.remove('fade-in'); el.classList.add('fade-out'); });
+                }, 3000);
+            }
+        }
+
+        function shiftPixels() {
+            const wrapper = document.getElementById('display-wrapper');
+            const x = (Math.random() * 6 - 3).toFixed(1);
+            const y = (Math.random() * 6 - 3).toFixed(1);
+            wrapper.style.transform = `translate(${x}px, ${y}px)`;
+        }
+
+        function handleGlobalClick(e) {
+            wakeUp();
+            const settings = document.getElementById('settings-panel');
+            const history = document.getElementById('history-panel');
+            const pomoPanel = document.getElementById('pomo-setup-panel');
+            
+            if (settings.classList.contains('open') && !settings.contains(e.target)) {
+                settings.classList.remove('open');
+                settings.scrollTop = 0;
+            }
+            if (history.classList.contains('open') && !history.contains(e.target)) history.classList.remove('open');
+            if (pomoPanel.classList.contains('open') && !pomoPanel.contains(e.target)) {
+                pomoPanel.classList.remove('open');
+            }
+        }
+
+        function handleTouchStart(e) {
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
+            const settings = document.getElementById('settings-panel');
+            const history = document.getElementById('history-panel');
+            const pomoPanel = document.getElementById('pomo-setup-panel');
+            startInPanel = settings.contains(e.target) || history.contains(e.target) || pomoPanel.contains(e.target);
+            wakeUp();
+        }
+
+        function handleTouchEnd(e) {
+            touchEndX = e.changedTouches[0].screenX;
+            touchEndY = e.changedTouches[0].screenY;
+            handleSwipe();
+        }
+
+        function handleSwipe() {
+            const pomoPanel = document.getElementById('pomo-setup-panel');
+            // Strict check: if Pomo Settings are open, kill all gestures
+            if (isRunning || startInPanel || pomoPanel.classList.contains('open')) return; 
+            
+            const threshold = 60;
+            const diffX = touchEndX - touchStartX;
+            const diffY = touchEndY - touchStartY;
+
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                if (diffX < -threshold) {
+                    if (mode === 'stopwatch') { setMode('pomodoro'); triggerHaptic(1.5); }
+                } else if (diffX > threshold) {
+                    if (mode === 'pomodoro') { setMode('stopwatch'); triggerHaptic(1.5); }
+                }
+            } 
+            else if (mode === 'pomodoro') {
+                if (diffY < -threshold) { adjustPomoTime(5); triggerHaptic(1); }
+                else if (diffY > threshold) { adjustPomoTime(-5); triggerHaptic(1); }
+            }
+        }
+
+        function adjustPomoTime(mins) {
+            let currentMins = parseInt(document.getElementById('pomoMinutes').value);
+            let newMins = Math.max(1, currentMins + mins);
+            document.getElementById('pomoMinutes').value = newMins;
+            updatePomoTime();
+        }
+
+        function handleWheel(e) {
+            const settings = document.getElementById('settings-panel');
+            const history = document.getElementById('history-panel');
+            if (isRunning || settings.contains(e.target) || history.contains(e.target)) return; 
+        }
+
+        function handleWallpaper(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const data = e.target.result;
+                    document.body.style.backgroundImage = `url(${data})`;
+                    document.body.classList.add('has-wallpaper');
+                    localStorage.setItem('zen-wallpaper', data);
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function clearWallpaper() {
+            document.body.style.backgroundImage = 'none';
+            document.body.classList.remove('has-wallpaper');
+            localStorage.removeItem('zen-wallpaper');
+        }
+
+        function getTodayKey() { return new Date().toISOString().split('T')[0]; }
+
+        function logSession() {
+            const isStopwatchValid = mode === 'stopwatch' && elapsedTime >= 10000;
+            const isPomoValid = mode === 'pomodoro' && elapsedTime >= pomoDuration;
+            if ((isStopwatchValid || isPomoValid) && !sessionLogged) {
+                sessionCount++;
+                sessionLogged = true;
+                localStorage.setItem('zen-session-count', sessionCount);
+                const history = JSON.parse(localStorage.getItem('zen-history') || '[]');
+                const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const dayKey = getTodayKey();
+                history.unshift({ id: Date.now(), date: dayKey, time: timestamp, duration: formatTime(elapsedTime), rawMs: elapsedTime, mode: mode });
+                localStorage.setItem('zen-history', JSON.stringify(history.slice(0, 50)));
+                const stats = JSON.parse(localStorage.getItem('zen-daily-stats') || '{}');
+                stats[dayKey] = (stats[dayKey] || 0) + elapsedTime;
+                localStorage.setItem('zen-daily-stats', JSON.stringify(stats));
+                updateCounterUI();
+                renderHistory();
+            }
+        }
+
+        function deleteSession(id) {
+            let history = JSON.parse(localStorage.getItem('zen-history') || '[]');
+            const itemIndex = history.findIndex(item => item.id === id);
+            if (itemIndex > -1) {
+                const item = history[itemIndex];
+                const stats = JSON.parse(localStorage.getItem('zen-daily-stats') || '{}');
+                if (stats[item.date]) stats[item.date] = Math.max(0, stats[item.date] - item.rawMs);
+                localStorage.setItem('zen-daily-stats', JSON.stringify(stats));
+                sessionCount = Math.max(0, sessionCount - 1);
+                localStorage.setItem('zen-session-count', sessionCount);
+                history.splice(itemIndex, 1);
+                localStorage.setItem('zen-history', JSON.stringify(history));
+                updateCounterUI();
+                renderHistory();
+            }
+        }
+
+        function updateCounterUI() { document.getElementById('session-counter').innerText = `Sessions: ${sessionCount}`; }
+
+        function renderHistory() {
+            const list = document.getElementById('history-list');
+            const history = JSON.parse(localStorage.getItem('zen-history') || '[]');
+            list.innerHTML = history.map(item => `
+                <div class="history-item">
+                    <span>${item.time} (${item.mode[0].toUpperCase()}) - ${item.duration}</span>
+                    <button class="delete-btn" onclick="deleteSession(${item.id})">×</button>
+                </div>
+            `).join('');
+            const statsDiv = document.getElementById('daily-stats');
+            const stats = JSON.parse(localStorage.getItem('zen-daily-stats') || '{}');
+            const sortedDays = Object.keys(stats).sort().reverse().slice(0, 7);
+            statsDiv.innerHTML = sortedDays.map(day => {
+                const label = day === getTodayKey() ? "Today" : day.split('-').slice(1).join('/');
+                return `<div class="stat-row"><span>${label}</span><span>${formatTime(stats[day])}</span></div>`;
+            }).join('');
+        }
+
+        function resetSessionCount() {
+            if(!confirm("Wipe all session data?")) return;
+            sessionCount = 0;
+            localStorage.setItem('zen-session-count', 0);
+            localStorage.setItem('zen-history', '[]');
+            localStorage.setItem('zen-daily-stats', '{}');
+            updateCounterUI();
+            renderHistory();
+        }
+
+        function formatTime(ms, isPomoOvertime = false) {
+            let totalSeconds = Math.floor(ms / 1000);
+            let s = totalSeconds % 60;
+            let m = Math.floor(totalSeconds / 60) % 60;
+            let h = Math.floor(totalSeconds / 3600);
+            let timeStr = h > 0 ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}` : `${m}:${s.toString().padStart(2, '0')}`;
+            if (totalSeconds < 60 && h === 0 && mode === 'stopwatch') timeStr = s; 
+            return isPomoOvertime ? `+${timeStr}` : timeStr;
+        }
+
+        function updateDisplay() {
+            const display = document.getElementById('display');
+            if (mode === 'stopwatch') {
+                display.innerText = formatTime(elapsedTime);
+            } else {
+                let remaining = pomoDuration - elapsedTime;
+                if (remaining <= 0) {
+                    if (!chimePlayed) { playWindChime(); chimePlayed = true; logSession(); triggerHaptic(5); }
+                    display.classList.add('overtime-active');
+                    display.innerText = formatTime(Math.abs(remaining), true);
+                } else {
+                    display.innerText = formatTime(remaining);
+                }
+            }
+            if (document.getElementById('autoDimToggle').checked && isRunning && elapsedTime > 120000) {
+                document.body.classList.add('dimmed');
+            }
+        }
+
+        function startTimer() {
+            isRunning = true; sessionLogged = false; requestWakeLock();
+            document.body.classList.add('timer-running');
+            triggerHaptic(2);
+            document.getElementById('toggleIcon').innerHTML = '<rect x="6" y="6" width="12" height="12"/>';
+            startTime = Date.now() - elapsedTime;
+            pixelShiftInterval = setInterval(shiftPixels, 300000);
+            timerInterval = setInterval(() => {
+                elapsedTime = Date.now() - startTime;
+                updateDisplay();
+                if (Math.floor(elapsedTime / 1000) % 5 === 0) saveState();
+            }, 100);
+            saveState(); wakeUp();
+        }
+
+        function stopTimer() { 
+            if (!isRunning) return;
+            isRunning = false; releaseWakeLock();
+            document.body.classList.remove('timer-running');
+            triggerHaptic(2);
+            document.getElementById('toggleIcon').innerHTML = '<path d="M5 3l14 9-14 9V3z"/>';
+            clearInterval(timerInterval);
+            clearInterval(pixelShiftInterval);
+            document.getElementById('display-wrapper').style.transform = 'translate(0,0)';
+            saveState(); wakeUp(); 
+        }
+
+        function resetTimer() { 
+            if (isRunning) stopTimer(); 
+            logSession();
+            triggerHaptic(3);
+            elapsedTime = 0; chimePlayed = false; sessionLogged = false;
+            document.getElementById('display').classList.remove('overtime-active'); 
+            updateDisplay(); saveState(); 
+        }
+        
+        function toggleTimer(e) { 
+            if (e) e.stopPropagation(); 
+            // Disable start/stop if Pomo Panel is open
+            if (document.getElementById('pomo-setup-panel').classList.contains('open')) return;
+            isRunning ? stopTimer() : startTimer(); 
+        }
+        
+        function setMode(m) { 
+            if (isRunning) return; 
+            mode = m; 
+            if(m === 'pomodoro') document.body.classList.add('pomo-mode');
+            else document.body.classList.remove('pomo-mode');
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.id === `mode-${m}`)); 
+            resetTimer(); 
+        }
+        
+        function toggleSettings(e) { 
+            if (e) e.stopPropagation(); 
+            triggerHaptic(1);
+            const panel = document.getElementById('settings-panel');
+            panel.classList.toggle('open'); 
+            if (!panel.classList.contains('open')) panel.scrollTop = 0; 
+            document.getElementById('history-panel').classList.remove('open'); 
+            document.getElementById('pomo-setup-panel').classList.remove('open');
+        }
+        
+        function toggleHistory(e) { 
+            if (e) e.stopPropagation(); 
+            triggerHaptic(1);
+            const panel = document.getElementById('history-panel');
+            panel.classList.toggle('open'); 
+            document.getElementById('settings-panel').classList.remove('open'); 
+            document.getElementById('pomo-setup-panel').classList.remove('open');
+        }
+
+        function togglePomoPanel(e) {
+            if (e) e.stopPropagation();
+            triggerHaptic(1);
+            const panel = document.getElementById('pomo-setup-panel');
+            panel.classList.toggle('open');
+            document.getElementById('settings-panel').classList.remove('open');
+            document.getElementById('history-panel').classList.remove('open');
+        }
+
+        function setPreset(min) { document.getElementById('pomoMinutes').value = min; updatePomoTime(); triggerHaptic(1); }
+        function updatePomoTime() { pomoDuration = document.getElementById('pomoMinutes').value * 60 * 1000; resetTimer(); }
+        
+        function updateUI(v, val) { 
+            document.documentElement.style.setProperty('--' + v, val); 
+            localStorage.setItem(v, val); 
+            if(v === 'timer-font') document.body.style.fontFamily = val;
+            if(v === 'timer-color' || v === 'bg-color') {
+                const input = v === 'timer-color' ? document.getElementById('timerColorInput') : document.getElementById('bgInput');
+                input.style.backgroundColor = val;
+                const r = parseInt(val.substr(1,2),16), g = parseInt(val.substr(3,2),16), b = parseInt(val.substr(5,2),16);
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                input.style.color = brightness > 125 ? 'black' : 'white';
+            }
+        }
+
+        function saveSetting(key, val) { localStorage.setItem(key, val); if(key === 'haptic-intensity') triggerHaptic(1); }
+        function toggleFullScreen() { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); triggerHaptic(1.5); }
+
+        function playWindChime() {
+            if (!document.getElementById('soundToggle').checked) return;
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const tones = [523.25, 659.25, 783.99, 987.77]; 
+            tones.forEach((freq, i) => {
+                const osc = ctx.createOscillator(); const gain = ctx.createGain();
+                osc.type = 'sine'; osc.frequency.setValueAtTime(freq, ctx.currentTime + (i * 0.15));
+                gain.gain.setValueAtTime(0.08, ctx.currentTime + (i * 0.15));
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 4);
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.start(ctx.currentTime + (i * 0.15)); osc.stop(ctx.currentTime + 4);
+            });
+        }
+
+        function saveState() { 
+            localStorage.setItem('zen-timer-state', JSON.stringify({ mode, elapsedTime, isRunning, startTime: isRunning ? startTime : null, pomoDuration })); 
+        }
+
+        window.onload = () => {
+            ['bg-color', 'timer-color', 'font-size', 'timer-font'].forEach(s => {
+                const saved = localStorage.getItem(s);
+                if(saved) {
+                    updateUI(s, saved);
+                    if(s === 'bg-color') document.getElementById('bgInput').value = saved;
+                    if(s === 'timer-color') document.getElementById('timerColorInput').value = saved;
+                    if(s === 'font-size') document.getElementById('sizeInput').value = parseFloat(saved);
+                } else {
+                    if(s === 'bg-color') updateUI(s, '#000000');
+                    if(s === 'timer-color') updateUI(s, '#ffffff');
+                }
+            });
+
+            const savedWallpaper = localStorage.getItem('zen-wallpaper');
+            if (savedWallpaper) {
+                document.body.style.backgroundImage = `url(${savedWallpaper})`;
+                document.body.classList.add('has-wallpaper');
+            }
+
+            document.getElementById('soundToggle').checked = localStorage.getItem('sound-pref') !== 'false';
+            document.getElementById('hapticToggle').checked = localStorage.getItem('haptic-pref') === 'true';
+            document.getElementById('hapticIntensity').value = localStorage.getItem('haptic-intensity') || 20;
+            document.getElementById('autoDimToggle').checked = localStorage.getItem('auto-dim') === 'true';
+            sessionCount = parseInt(localStorage.getItem('zen-session-count') || 0);
+            updateCounterUI(); renderHistory();
+            const savedState = JSON.parse(localStorage.getItem('zen-timer-state'));
+            if(savedState) {
+                mode = savedState.mode; pomoDuration = savedState.pomoDuration;
+                if(mode === 'pomodoro') document.body.classList.add('pomo-mode');
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.id === `mode-${mode}`));
+                if(savedState.isRunning) { elapsedTime = Date.now() - savedState.startTime; startTimer(); } 
+                else { elapsedTime = savedState.elapsedTime; updateDisplay(); }
+            }
+        };
+
+        window.onbeforeunload = () => { saveState(); };
+        window.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+            // Block keyboard shortcuts if pomo panel is open too
+            if (document.getElementById('pomo-setup-panel').classList.contains('open')) return;
+            
+            if (e.key === ' ') { e.preventDefault(); toggleTimer(); }
+            if (e.key.toLowerCase() === 'r') resetTimer();
+            if (e.key.toLowerCase() === 's') toggleSettings(e);
+            if (e.key.toLowerCase() === 'h') toggleHistory(e);
+            if (e.key.toLowerCase() === 'f') toggleFullScreen();
+            if (e.key.toLowerCase() === 'm') setMode(mode === 'stopwatch' ? 'pomodoro' : 'stopwatch');
+        });
+    </script>
+</body>
+</html>
